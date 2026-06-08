@@ -1,0 +1,86 @@
+### Create Service Request
+POST http://localhost:8080/api/requests
+Content-Type: application/json
+
+{
+  "clientId": 3,
+  "serviceId": 1,
+  "address": "Karachi Pakistan",
+  "bookingDate": "2026-06-10",
+  "bookingTime": "10:00:00",
+  "issueDescription": "Kitchen pipe leakage"
+}
+
+### Assign Worker
+POST http://localhost:8080/api/assignments
+Content-Type: application/json
+
+{
+  "serviceRequestId": 1,
+  "workerId": 2
+}
+
+### Get Request
+GET http://localhost:8080/users/admin/
+
+
+
+
+### Start Work
+PUT http://localhost:8080/api/requests/1/status
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS"
+}
+
+
+### Complete Work
+PUT http://localhost:8080/api/requests/1/status
+Content-Type: application/json
+
+{
+  "status": "COMPLETED"
+}
+
+
+### Test Real Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "ali1@gmail.com",
+  "password": "12345678"
+}
+
+### Test Seeded Worker Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "worker@fixmate.com",
+  "password": "worker123"
+}
+
+### Create New Worker Directly
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{
+  "name": "admin",
+  "email": "admin@fixmate.com",
+  "password": "admin123",
+  "role": "ADMIN"
+}
+
+### Login New Worker
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "aliworker@test.com",
+  "password": "12345678"
+}
+
+GET http://localhost:8080/api/requests/client/3
+Content-Type: application/json

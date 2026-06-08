@@ -1,0 +1,387 @@
+================================================================
+  FIXMATE - PHASE 3: DESIGN PATTERNS DOCUMENTATION
+================================================================
+
+Project  : FixMate Home Service System
+Package  : com.fixmate.patterns
+Patterns : Factory, Command, Null Object, Mediator, Observer,
+           Singleton, Adapter  (7 total)
+
+================================================================
+1. FACTORY PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.factory
+
+CLASS DIAGRAM:
+  <<interface>>
+  HomeService
+    + getServiceName() : String
+    + getDescription() : String
+    + execute() : void
+        ^
+        |--- PlumbingService
+        |--- ElectricalService
+        |--- CleaningService
+
+  ServiceFactory
+    + create(serviceType: String) : HomeService   [static]
+
+FILES:
+  HomeService.java          (Product Interface)
+  PlumbingService.java      (Concrete Product)
+  ElectricalService.java    (Concrete Product)
+  CleaningService.java      (Concrete Product)
+  ServiceFactory.java       (Creator / Factory)
+
+HOW IT WORKS:
+  Instead of writing:
+      HomeService s = new PlumbingService();
+  Admin code writes:
+      HomeService s = ServiceFactory.create("Plumbing");
+  The factory decides which class to instantiate based on the string.
+
+WHICH API USES IT:
+  POST /api/services  — When admin creates a service, the factory
+  can instantiate the correct HomeService type before persisting.
+
+VIVA EXPLANATION:
+  "Factory Pattern hides the object creation logic. The caller just
+   says what type it wants, and the factory returns the right object.
+   In FixMate, ServiceFactory creates PlumbingService, ElectricalService,
+   or CleaningService based on the service name. This follows the Open/
+   Closed Principle: to add a new service type we only add a new class
+   and update the factory — we never change the calling code."
+
+================================================================
+2. COMMAND PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.command
+
+CLASS DIAGRAM:
+  <<interface>>
+  Command
+    + execute() : void
+        ^
+        |--- CreateRequestCommand
+        |--- AssignWorkerCommand
+        |--- CompleteRequestCommand
+
+  RequestInvoker
+    - history : List<Command>
+    + executeCommand(command: Command) : void
+    + getHistory() : List<Command>
+
+FILES:
+  Command.java                  (Command Interface)
+  CreateRequestCommand.java     (Concrete Command)
+  AssignWorkerCommand.java      (Concrete Command)
+  CompleteRequestCommand.java   (Concrete Command)
+  RequestInvoker.java           (Invoker)
+
+HOW IT WORKS:
+  Each action (create, assign, complete) is wrapped in a Command object.
+  RequestInvoker calls execute() without knowing the details.
+  History list allows tracking all executed commands.
+
+WHICH API USES IT:
+  POST /api/requests         -> CreateRequestCommand
+  POST /api/assignments      -> AssignWorkerCommand
+  PUT  /api/requests/{id}/status (COMPLETED) -> CompleteRequestCommand
+
+VIVA EXPLANATION:
+  "Command Pattern turns a request into a standalone object. In FixMate,
+   instead of calling the service method directly, we wrap the action in
+   a command object and pass it to RequestInvoker. This gives us:
+   1. Decoupling between sender and receiver.
+   2. A history of all actions executed.
+   3. The ability to add undo support later without changing existing code."
+
+================================================================
+3. NULL OBJECT PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.nullobject
+
+CLASS DIAGRAM:
+  <<interface>>
+  Worker
+    + getName() : String
+    + getEmail() : String
+    + isNull() : boolean
+    + performWork(task) : void
+        ^
+        |--- RealWorker   (isNull = false)
+        |--- NullWorker   (isNull = true)
+
+FILES:
+  Worker.java       (Abstract Target Interface)
+  RealWorker.java   (Real Implementation)
+  NullWorker.java   (Null Implementation)
+
+HOW IT WORKS:
+  When fetching the assigned worker for a request:
+  - If a worker exists  -> return RealWorker
+  - If no worker yet    -> return NullWorker (never null)
+  The caller uses Worker.performWork() safely without null checks.
+
+WHICH API USES IT:
+  GET /api/requests/{id}
+  GET /api/assignments
+  When building the response, if no assignment exists, NullWorker
+  is used so the application never throws NullPointerException.
+
+VIVA EXPLANATION:
+  "Null Object Pattern eliminates null checks by providing a default
+   'do-nothing' object. In FixMate, instead of returning null when no
+   worker is assigned, we return a NullWorker. The calling code calls
+   worker.getName() or worker.performWork() safely. NullWorker just
+   returns 'Unassigned' and prints a message — no crash, no if-null."
+
+================================================================
+4. MEDIATOR PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.mediator
+
+CLASS DIAGRAM:
+  <<interface>>
+  ServiceMediator
+    + sendMessage(from, to, message) : void
+    + notifyStatusChange(requestId, status) : void
+        ^
+        |--- FixMateMediator
+
+  Participants (communicate via mediator, never directly):
+    Client  -->  FixMateMediator  -->  Worker
+    Admin   -->  FixMateMediator  -->  Client
+
+FILES:
+  ServiceMediator.java    (Mediator Interface)
+  FixMateMediator.java    (Concrete Mediator)
+
+HOW IT WORKS:
+  Client never calls Worker directly.
+  Admin never calls Client directly.
+  All messages pass through FixMateMediator.
+  FixMateMediator decides who gets notified based on the status/event.
+
+WHICH API USES IT:
+  PUT /api/requests/{id}/status
+  POST /api/assignments
+  Mediator routes notifications to the right parties after each action.
+
+VIVA EXPLANATION:
+  "Mediator Pattern reduces chaotic many-to-many communication to a
+   structured one-to-one communication via a central mediator. In FixMate,
+   Client, Admin, and Worker never talk to each other directly — all
+   communication goes through FixMateMediator. This reduces coupling and
+   makes it easy to change communication rules in one place."
+
+================================================================
+5. OBSERVER PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.observer
+
+CLASS DIAGRAM:
+  <<interface>>
+  StatusObserver
+    + onStatusChanged(requestId, newStatus, targetEmail) : void
+        ^
+        |--- ClientObserver
+        |--- WorkerObserver
+
+  RequestStatusPublisher
+    - observers : List<StatusObserver>
+    + subscribe(observer)
+    + unsubscribe(observer)
+    + notifyObservers(requestId, newStatus, targetEmail)
+
+FILES:
+  StatusObserver.java            (Observer Interface)
+  ClientObserver.java            (Concrete Observer)
+  WorkerObserver.java            (Concrete Observer)
+  RequestStatusPublisher.java    (Subject / Publisher)
+
+HOW IT WORKS:
+  RequestStatusPublisher is the Subject.
+  ClientObserver and WorkerObserver subscribe to it.
+  When status changes to ASSIGNED, IN_PROGRESS, or COMPLETED,
+  notifyObservers() is called and all subscribers are informed.
+
+WHICH API USES IT:
+  PUT /api/requests/{id}/status
+  When status is updated, the publisher notifies registered observers
+  (Client gets notified about their request, Worker about their task).
+
+VIVA EXPLANATION:
+  "Observer Pattern implements a one-to-many dependency. When the subject
+   (RequestStatusPublisher) changes state, all registered observers are
+   automatically notified. In FixMate, ClientObserver and WorkerObserver
+   listen for status changes. This decouples the status-update logic from
+   the notification logic — we can add an EmailObserver or SMSObserver
+   later without changing any existing code."
+
+================================================================
+6. SINGLETON PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.singleton
+
+CLASS DIAGRAM:
+  AppLogger
+    - instance : AppLogger           [static]
+    - AppLogger()                    [private constructor]
+    + getInstance() : AppLogger      [static, synchronized]
+    + info(message)
+    + warn(message)
+    + error(message)
+
+FILES:
+  AppLogger.java    (Singleton)
+
+HOW IT WORKS:
+  - Constructor is private — no one can write 'new AppLogger()'.
+  - getInstance() creates the object on first call and returns the
+    same instance on every subsequent call.
+  - synchronized keyword ensures thread safety.
+
+USAGE EXAMPLE:
+  AppLogger.getInstance().info("User created: monis@test.com");
+  AppLogger.getInstance().warn("Invalid login attempt.");
+  AppLogger.getInstance().error("Database connection failed.");
+
+WHICH API USES IT:
+  Can be used across all controllers and services for consistent
+  application-wide logging without creating multiple logger instances.
+
+VIVA EXPLANATION:
+  "Singleton Pattern ensures a class has only one instance throughout
+   the entire application. In FixMate, AppLogger is a Singleton — no
+   matter how many controllers call AppLogger.getInstance(), they all
+   get the exact same object. The private constructor blocks direct
+   instantiation. This is useful for shared resources like loggers,
+   configuration managers, and database connection pools."
+
+================================================================
+7. ADAPTER PATTERN
+================================================================
+
+LOCATION: com.fixmate.patterns.adapter
+
+CLASS DIAGRAM:
+  <<interface>>
+  NotificationSender          (Target — what the application expects)
+    + send(recipient, message) : void
+        ^
+        |--- EmailNotificationAdapter  --uses-->  EmailService (Adaptee)
+        |--- SmsNotificationAdapter   --uses-->  SmsService   (Adaptee)
+
+  EmailService  (Adaptee / third-party)
+    + sendEmail(toAddress, subject, body) : void
+
+  SmsService  (Adaptee / third-party)
+    + sendSms(phoneNumber, textMessage) : void
+
+FILES:
+  NotificationSender.java          (Target Interface)
+  EmailService.java                (Adaptee — existing email service)
+  SmsService.java                  (Adaptee — existing SMS service)
+  EmailNotificationAdapter.java    (Concrete Adapter for Email)
+  SmsNotificationAdapter.java      (Concrete Adapter for SMS)
+
+HOW IT WORKS:
+  EmailService and SmsService have their own incompatible method names
+  (sendEmail, sendSms). The application only knows NotificationSender.send().
+  Adapters wrap the external services and translate send() into the
+  correct underlying call.
+
+USAGE EXAMPLE:
+  // Send via Email
+  NotificationSender sender = new EmailNotificationAdapter(new EmailService());
+  sender.send("client@email.com", "Your booking status has changed");
+
+  // Send via SMS — same interface, different channel
+  NotificationSender sender = new SmsNotificationAdapter(new SmsService());
+  sender.send("+923001234567", "Your booking status has changed");
+
+WHICH API USES IT:
+  POST /api/assignments       — notify client and worker via email/SMS
+  PUT  /api/requests/{id}/status — send status-change notification
+  The application calls sender.send() uniformly regardless of channel.
+
+VIVA EXPLANATION:
+  "Adapter Pattern acts as a bridge between two incompatible interfaces.
+   In FixMate, we have EmailService with sendEmail() and SmsService with
+   sendSms() — their signatures don't match what our application expects.
+   Instead of rewriting those services, we create adapters that implement
+   NotificationSender and internally delegate to the right method.
+   This lets us swap Email for SMS (or add WhatsApp later) without
+   changing a single line in the business logic."
+
+================================================================
+SUMMARY: WHICH API USES WHICH PATTERN
+================================================================
+
+  API Endpoint                     Design Pattern(s) Applied
+  ─────────────────────────────────────────────────────────────
+  POST /api/services               Factory Pattern
+  POST /api/requests               Command (CreateRequestCommand)
+  POST /api/assignments            Command (AssignWorkerCommand)
+                                   Mediator (notifies client + worker)
+                                   Adapter  (sends email/SMS notification)
+  PUT  /api/requests/{id}/status   Command (CompleteRequestCommand)
+                                   Observer (notifies observers)
+                                   Mediator (routes notifications)
+                                   Adapter  (sends email/SMS notification)
+  GET  /api/requests/{id}          Null Object (NullWorker if unassigned)
+  GET  /api/assignments            Null Object (NullWorker if unassigned)
+  ALL  endpoints                   Singleton (AppLogger for logging)
+
+================================================================
+CLASS DIAGRAM OVERVIEW (ALL 7 PATTERNS)
+================================================================
+
+  patterns/
+  ├── factory/
+  │     HomeService <<interface>>
+  │       ├── PlumbingService
+  │       ├── ElectricalService
+  │       └── CleaningService
+  │     ServiceFactory (creates HomeService objects)
+  │
+  ├── command/
+  │     Command <<interface>>
+  │       ├── CreateRequestCommand
+  │       ├── AssignWorkerCommand
+  │       └── CompleteRequestCommand
+  │     RequestInvoker (executes commands, keeps history)
+  │
+  ├── nullobject/
+  │     Worker <<interface>>
+  │       ├── RealWorker (actual assigned worker)
+  │       └── NullWorker (returned when no worker assigned)
+  │
+  ├── mediator/
+  │     ServiceMediator <<interface>>
+  │       └── FixMateMediator (routes messages between Client/Admin/Worker)
+  │
+  ├── observer/
+  │     StatusObserver <<interface>>
+  │       ├── ClientObserver
+  │       └── WorkerObserver
+  │     RequestStatusPublisher (subject, notifies all observers)
+  │
+  ├── singleton/
+  │     AppLogger (one instance, system-wide logger)
+  │
+  └── adapter/
+        NotificationSender <<interface>>
+          ├── EmailNotificationAdapter --uses--> EmailService
+          └── SmsNotificationAdapter  --uses--> SmsService
+
+================================================================
+END OF PHASE 3 DOCUMENTATION
+================================================================

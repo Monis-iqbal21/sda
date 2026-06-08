@@ -1,0 +1,43 @@
+Create the actual files now.
+
+Project root:
+
+fixmate/
+├── frontend
+├── fixmate-backend
+├── docs
+│   └── diagrams
+
+Create the folder:
+docs/diagrams
+
+Then physically create these files:
+
+docs/diagrams/use-case-diagram.md
+docs/diagrams/class-diagram.md
+docs/diagrams/sequence-book-request.md
+docs/diagrams/sequence-assign-worker.md
+docs/diagrams/activity-diagram.md
+docs/diagrams/erd-diagram.md
+docs/diagrams/factory-pattern-diagram.md
+docs/diagrams/command-pattern-diagram.md
+docs/diagrams/null-object-pattern-diagram.md
+docs/diagrams/mediator-pattern-diagram.md
+docs/diagrams/observer-pattern-diagram.md
+docs/diagrams/singleton-pattern-diagram.md
+docs/diagrams/adapter-pattern-diagram.md
+
+For each file:
+1. Add title
+2. Add explanation
+3. Add Mermaid code
+4. Save the file
+
+Do not print the diagrams in chat.
+Actually create the files in the project.
+
+After completion:
+Show me:
+- Folder tree
+- Files created
+- File count
